@@ -20,18 +20,31 @@ class KeyAndSecretAwsLogsAppender extends AwsLogsAppender {
     def getCredentials() = new BasicAWSCredentials(awsKey, awsSecret)
     def refresh() = ()
   }
+
+  override def start () {
+    if (awsKey == null) addError("Parameter [awsKey] must be specified")
+    else if (awsSecret == null) addError("Parameter [awsSecret] must be specified")
+    else super.start()
+  }
 }
 
 class CredentialsProviderAwsLogsAppender extends AwsLogsAppender {
   @BeanProperty var credentialsProvider: AWSCredentialsProvider = _
 
   override protected lazy val awsCredentialsProvider = credentialsProvider
+
+  override def start () {
+    if (credentialsProvider == null) addError("Parameter [credentialsProvider] must be specified")
+    else super.start()
+  }
 }
 
 abstract class AwsLogsAppender () extends UnsynchronizedAppenderBase[ILoggingEvent] {
   @BeanProperty var logGroup: String = _
   @BeanProperty var logStream: String = _
   @BeanProperty var layout: Layout[ILoggingEvent] = _
+  @BeanProperty var maxBatchSize: Int = 200
+  @BeanProperty var maxInterval: Int = 20
 
   lazy val system = ActorSystem("awslogsappender")
   
@@ -44,46 +57,50 @@ abstract class AwsLogsAppender () extends UnsynchronizedAppenderBase[ILoggingEve
   override def start () {
     import system.dispatcher
 
-    logsClient = new AWSLogsAsyncClient(awsCredentialsProvider)
+    if (logGroup == null) addError("Parameter [logGroup] must be specified")
+    else if (logStream == null) addError("Parameter [logStream] must be specified")
+    else {
+      logsClient = new AWSLogsAsyncClient(awsCredentialsProvider)
 
-    // find the group or create it, same with stream
-    Await.result(
-      for {
-        groupsRes <- withAsyncHandler[DescribeLogGroupsRequest,DescribeLogGroupsResult](
-          logsClient.describeLogGroupsAsync(new DescribeLogGroupsRequest().withLogGroupNamePrefix(logGroup).withLimit(1), _)
-        )
+      // find the group or create it, same with stream
+      Await.result(
+        for {
+          groupsRes <- withAsyncHandler[DescribeLogGroupsRequest,DescribeLogGroupsResult](
+            logsClient.describeLogGroupsAsync(new DescribeLogGroupsRequest().withLogGroupNamePrefix(logGroup).withLimit(1), _)
+          )
 
-        _ <- {
-          groupsRes.getLogGroups.asScala.headOption map {_ =>
-            Future.successful(())
-          } getOrElse {
-            withAsyncHandler[CreateLogGroupRequest,java.lang.Void](
-              logsClient.createLogGroupAsync(new CreateLogGroupRequest().withLogGroupName(logGroup), _)
-            )
+          _ <- {
+            groupsRes.getLogGroups.asScala.headOption map {_ =>
+              Future.successful(())
+            } getOrElse {
+              withAsyncHandler[CreateLogGroupRequest,java.lang.Void](
+                logsClient.createLogGroupAsync(new CreateLogGroupRequest().withLogGroupName(logGroup), _)
+              )
+            }
           }
-        }
-        streamsRes <- withAsyncHandler[DescribeLogStreamsRequest,DescribeLogStreamsResult](
-          logsClient.describeLogStreamsAsync(new DescribeLogStreamsRequest().withLogGroupName(logGroup).withLogStreamNamePrefix(logStream).withLimit(1), _)
-        )
-        uploadSequenceToken <- {
-          streamsRes.getLogStreams.asScala.headOption map {stream =>
-            Future.successful(Some(stream.getUploadSequenceToken))
-          } getOrElse {
-            withAsyncHandler[CreateLogStreamRequest,java.lang.Void](
-              logsClient.createLogStreamAsync(new CreateLogStreamRequest().withLogGroupName(logGroup).withLogStreamName(logStream), _)
-            ) map (_ => None)
+          streamsRes <- withAsyncHandler[DescribeLogStreamsRequest,DescribeLogStreamsResult](
+            logsClient.describeLogStreamsAsync(new DescribeLogStreamsRequest().withLogGroupName(logGroup).withLogStreamNamePrefix(logStream).withLimit(1), _)
+          )
+          uploadSequenceToken <- {
+            streamsRes.getLogStreams.asScala.headOption map {stream =>
+              Future.successful(Some(stream.getUploadSequenceToken))
+            } getOrElse {
+              withAsyncHandler[CreateLogStreamRequest,java.lang.Void](
+                logsClient.createLogStreamAsync(new CreateLogStreamRequest().withLogGroupName(logGroup).withLogStreamName(logStream), _)
+              ) map (_ => None)
+            }
           }
-        }
-      } yield {
-        actor = system.actorOf(
-          Props(classOf[AwsLogsAppenderActor], logsClient, logGroup, logStream, uploadSequenceToken, layout, 100, 20.seconds),
-          "awslogsappender"
-        )
-      },
-      5.seconds
-    )
-     
-    super.start()
+        } yield {
+          actor = system.actorOf(
+            Props(classOf[AwsLogsAppenderActor], logsClient, logGroup, logStream, uploadSequenceToken, layout, maxBatchSize, maxInterval.seconds),
+            "awslogsappender"
+          )
+        },
+        5.seconds
+      )
+       
+      super.start()
+    }
   }
 
   def append (ev: ILoggingEvent) {
