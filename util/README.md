@@ -8,6 +8,8 @@ Usage
 
 Add this to build.sbt:
 ```sbt
+resolvers += "gravity" at "https://devstack.io/repo/gravitydev/public"
+
 libraryDependencies += "com.gravitydev" %% "awsutil" % "0.0.1-SNAPSHOT"
 ```
 
