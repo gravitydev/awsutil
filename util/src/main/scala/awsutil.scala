@@ -16,6 +16,9 @@ object `package` {
     fn( new AwsAsyncPromiseHandler(p) )
     p.future
   }
+  
+  def awsToScala [R<:AmazonWebServiceRequest,T](fn: Function2[R,AsyncHandler[R,T],java.util.concurrent.Future[T]]): Function1[R,Future[T]] = 
+    r => withAsyncHandler[R,T](fn(r, _))
 
 }
 
