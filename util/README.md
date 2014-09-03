@@ -7,27 +7,29 @@ Motivation
 ----------
 
 Amazon AWS sdk comes with async variants of most of their methods, but they return a java Future (pretty useless) instead of a scala Future.
-There's no easy or clean way to turn that into a scala Future (much more useful). Fortunately, their methods usually also include a version
-that takes an instance of AsyncHandler which this utility uses to create a scala version of the method. 
+There's no easy or clean way to turn that into a scala Future. Fortunately, their methods usually also include a version
+that takes an instance of AsyncHandler, which this utility uses to create a scala version of the method. 
 
 Essentially, this utility turns this:
 ```scala
-// some async aws sdk method
-(R<:AmazonWebServiceRequest, AsyncHandler[R,T]) => java.util.concurrent.Future[T]
+// some async aws sdk method:
+// (R<:AmazonWebServiceRequest, AsyncHandler[R,T]) => java.util.concurrent.Future[T]
+client.someMethodAsync(request, handler): Future[T] // java future
 ```
 into:
 ```scala
-R<:AmazonWebServiceRequest => scala.concurrent.Future[T]
+// R<:AmazonWebServiceRequest => Future[T] // scala future
+awsToScala(client.someMethodAsync)(request): Future[T] // scala future
 ```
 
 Installation
 ------------
+It's really just a method, you can look at the source and copy it if you want. Or use this if you want:
 
-Add this to build.sbt:
 ```sbt
 resolvers += "gravity" at "https://devstack.io/repo/gravitydev/public"
 
-libraryDependencies += "com.gravitydev" %% "awsutil" % "0.0.1-SNAPSHOT"
+libraryDependencies += "com.gravitydev" %% "awsutil" % "0.0.2-SNAPSHOT"
 ```
 
 Use it like this:
@@ -46,10 +48,13 @@ val req = new GetItemRequest()
 // someAwsMethod(request, callback) => unit 
 // into a scala future
 // type: Future[BatchGetItemResult]
-val response = withAsyncHandler[BatchGetItemRequest,BatchGetItemResult](client.batchGetItemAsync(req, _))
+val response = awsToScala(client.batchGetItemAsync)(req)
 
 // do what you want with it now, asynchronously:
+// response is a regular scala Future[BatchGetItemResult]
 for (res <- response) yield {
   ...
 }
 ```
+
+You can use this with most (all?) of the Amazon AWS SDK methods suffixed with "...Async".
