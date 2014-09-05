@@ -11,14 +11,17 @@ object `package` {
     def onSuccess (r: R, x: T) = promise success x
   }
 
+  @deprecated("Just use awsToScala", "0.0.2-SNAPSHOT")
   def withAsyncHandler [R<:AmazonWebServiceRequest,T] (fn: AsyncHandler[R,T] => Unit): Future[T] = { 
     val p = Promise[T]
     fn( new AwsAsyncPromiseHandler(p) )
     p.future
   }
-  
-  def awsToScala [R<:AmazonWebServiceRequest,T](fn: Function2[R,AsyncHandler[R,T],java.util.concurrent.Future[T]]): Function1[R,Future[T]] = 
-    r => withAsyncHandler[R,T](fn(r, _))
 
+  def awsToScala [R<:AmazonWebServiceRequest,T](fn: Function2[R,AsyncHandler[R,T],java.util.concurrent.Future[T]]): Function1[R,Future[T]] = {req =>
+    val p = Promise[T]
+    fn(req, new AwsAsyncPromiseHandler(p) )
+    p.future
+  }
 }
 

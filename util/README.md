@@ -24,7 +24,7 @@ awsToScala(client.someMethodAsync)(request): Future[T] // scala future
 
 Installation
 ------------
-It's really just a method, you can look at the source and copy it if you want. Or use this if you want:
+It's really just a method, you can look at the source and copy it. Or use this if you want:
 
 ```sbt
 resolvers += "gravity" at "https://devstack.io/repo/gravitydev/public"
