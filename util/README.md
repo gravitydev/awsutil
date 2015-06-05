@@ -29,7 +29,7 @@ It's really just a method, you can look at the source and copy it. Or use this i
 ```sbt
 resolvers += "gravity" at "https://devstack.io/repo/gravitydev/public"
 
-libraryDependencies += "com.gravitydev" %% "awsutil" % "0.0.2-SNAPSHOT"
+libraryDependencies += "com.gravitydev" %% "awsutil" % "0.0.4-SNAPSHOT"
 ```
 
 Use it like this:
